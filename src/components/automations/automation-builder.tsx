@@ -599,6 +599,7 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
             <StepList
               steps={state.steps}
               parentPath={[]}
+              parentScope={{ kind: "root" }}
               expandedId={expandedId}
               setExpandedId={setExpandedId}
               updateStep={updateStep}
@@ -785,6 +786,7 @@ type StepPath = (
 interface StepListProps {
   steps: BuilderStep[]
   parentPath: StepPath
+  parentScope: ParentScope
   expandedId: string | null
   setExpandedId: (id: string | null) => void
   updateStep: (path: StepPath, updater: (s: BuilderStep) => BuilderStep) => void
@@ -794,15 +796,7 @@ interface StepListProps {
 }
 
 function StepList(props: StepListProps) {
-  const { steps, parentPath, ...rest } = props
-  const parentScope: ParentScope =
-    parentPath.length === 0
-      ? { kind: "root" }
-      : (() => {
-          const last = parentPath[parentPath.length - 1]
-          if (last.kind !== "branch") return { kind: "root" } as const
-          return { kind: "branch", parentCid: last.parentCid, branch: last.branch } as const
-        })()
+  const { steps, parentPath, parentScope, ...rest } = props
 
   return (
     <div className="flex flex-col items-center">
@@ -835,7 +829,7 @@ function StepRenderer({
   total: number
   parentScope: ParentScope
   parentPath: StepPath
-} & Omit<StepListProps, "steps" | "parentPath">) {
+} & Omit<StepListProps, "steps" | "parentPath" | "parentScope">) {
   const path: StepPath = [
     ...parentPath,
     parentScope.kind === "root"
@@ -946,30 +940,29 @@ function ConditionBranches({
 }: {
   step: BuilderStep
   parentPath: StepPath
-} & Omit<StepListProps, "steps" | "parentPath">) {
+} & Omit<StepListProps, "steps" | "parentPath" | "parentScope">) {
   const yes = step.branches?.yes ?? []
   const no = step.branches?.no ?? []
-  // Build the child scope by appending a branch marker. The scope the
-  // StepList uses is driven by the LAST element of parentPath, so the
-  // tail's `index` doesn't matter — it's replaced per child during walks.
-  const yesPath: StepPath = [
-    ...parentPath,
-    { kind: "branch", parentCid: step.cid, branch: "yes", index: 0 },
-  ]
-  const noPath: StepPath = [
-    ...parentPath,
-    { kind: "branch", parentCid: step.cid, branch: "no", index: 0 },
-  ]
   return (
     // Stack Yes/No vertically on mobile — two columns at 375px would
     // cram each branch to ~170px which is too narrow for the nested
     // cards. Two-column grid returns on sm+.
     <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
       <BranchColumn label="Yes" color="text-primary">
-        <StepList {...props} steps={yes} parentPath={yesPath} />
+        <StepList
+          {...props}
+          steps={yes}
+          parentPath={parentPath}
+          parentScope={{ kind: "branch", parentCid: step.cid, branch: "yes" }}
+        />
       </BranchColumn>
       <BranchColumn label="No" color="text-rose-400">
-        <StepList {...props} steps={no} parentPath={noPath} />
+        <StepList
+          {...props}
+          steps={no}
+          parentPath={parentPath}
+          parentScope={{ kind: "branch", parentCid: step.cid, branch: "no" }}
+        />
       </BranchColumn>
     </div>
   )
